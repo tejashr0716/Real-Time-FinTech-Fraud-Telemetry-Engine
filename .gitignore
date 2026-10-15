@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# C++ Build Artifacts
+cpp/*.dylib
+cpp/*.so
+cpp/benchmark_runner
+cpp/*.o
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment & OS
+.env
+.env.local
+.DS_Store
+*.log
