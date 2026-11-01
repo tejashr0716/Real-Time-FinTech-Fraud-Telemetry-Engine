@@ -87,3 +87,10 @@ async def test_authorize_blocked_tor_fraud_transaction(async_client):
     detail = response.json()["detail"]
     assert detail["code"] == "FRAUD_SECURITY_BLOCK"
     assert detail["fraud_score"] >= 75.0
+
+@pytest.mark.asyncio
+async def test_serve_dashboard(async_client):
+    response = await async_client.get("/")
+    assert response.status_code == 200
+    assert "FraudShield Telemetry Engine" in response.text
+    assert "C++ SIMD NATIVE" in response.text

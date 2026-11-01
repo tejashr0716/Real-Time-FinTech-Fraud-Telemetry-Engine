@@ -443,64 +443,115 @@
     }
 
     // --- Scenario Injections ---
-    function injectPreset(type) {
+    async function injectPreset(type) {
       initAudio();
-      const now = Date.now();
-      let tx = null;
+      let payload = null;
 
       if (type === 'normal') {
-        tx = {
+        payload = {
+          account_id: 'b0000001-0000-0000-0000-000000000001',
+          merchant_id: 'mer_apple_pay_direct',
           amount: 4.50,
-          decision: 'APPROVED',
-          fraud_score: 12.0,
-          primary_rule: 'BASELINE_CLEAR',
-          geo_city: 'New York',
+          currency: 'USD',
+          channel: 'ONLINE',
+          ip_address: '198.51.100.24',
+          device_fingerprint: 'fp_iphone15_pro_secure',
           geo_country: 'US',
-          timestamp: now
+          geo_city: 'New York',
+          distance_km: 0.0,
+          time_delta_seconds: 3600.0,
+          idempotency_key: 'PRESET-NORM-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
         };
       } else if (type === 'tor') {
-        tx = {
+        payload = {
+          account_id: 'b0000005-0000-0000-0000-000000000005',
+          merchant_id: 'mer_binance_fiat_bridge',
           amount: 9800.00,
-          decision: 'BLOCKED',
-          fraud_score: 95.0,
-          primary_rule: 'TOR_OR_ANON_PROXY',
-          geo_city: 'Moscow',
+          currency: 'USD',
+          channel: 'ONLINE',
+          ip_address: '185.220.101.5',
+          device_fingerprint: 'fp_tor_exit_node_browser',
           geo_country: 'RU',
-          timestamp: now
+          geo_city: 'Moscow',
+          distance_km: 7500.0,
+          time_delta_seconds: 600.0,
+          idempotency_key: 'PRESET-TOR-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
         };
       } else if (type === 'supersonic') {
-        tx = {
+        payload = {
+          account_id: 'b0000002-0000-0000-0000-000000000002',
+          merchant_id: 'mer_emirates_air_first',
           amount: 2500.00,
-          decision: 'BLOCKED',
-          fraud_score: 85.0,
-          primary_rule: 'IMPOSSIBLE_TRAVEL_VELOCITY',
-          geo_city: 'Tokyo',
+          currency: 'USD',
+          channel: 'ONLINE',
+          ip_address: '203.0.113.88',
+          device_fingerprint: 'fp_travel_velocity_test',
           geo_country: 'JP',
-          timestamp: now
+          geo_city: 'Tokyo',
+          distance_km: 8500.0,
+          time_delta_seconds: 60.0,
+          idempotency_key: 'PRESET-SUPER-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
         };
       } else if (type === 'card_testing') {
-        tx = {
+        payload = {
+          account_id: 'b0000005-0000-0000-0000-000000000005',
+          merchant_id: 'mer_apple_pay_direct',
           amount: 1.50,
-          decision: 'BLOCKED',
-          fraud_score: 78.0,
-          primary_rule: 'MICRO_DEPOSIT_CARD_TESTING',
-          geo_city: 'Amsterdam',
+          currency: 'USD',
+          channel: 'ONLINE',
+          ip_address: '198.51.100.24',
+          device_fingerprint: 'fp_card_tester_bot',
           geo_country: 'NL',
-          timestamp: now
+          geo_city: 'Amsterdam',
+          distance_km: 0.0,
+          time_delta_seconds: 5.0,
+          idempotency_key: 'PRESET-CARD-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
         };
       } else if (type === 'large_deviation') {
-        tx = {
+        payload = {
+          account_id: 'b0000001-0000-0000-0000-000000000001',
+          merchant_id: 'mer_harrods_knightsbridge',
           amount: 15000.00,
-          decision: 'FLAGGED',
-          fraud_score: 62.0,
-          primary_rule: 'EXTREME_DEVIATION_FROM_AVG',
-          geo_city: 'Miami',
+          currency: 'USD',
+          channel: 'ONLINE',
+          ip_address: '198.51.100.24',
+          device_fingerprint: 'fp_macbook_pro_dev',
           geo_country: 'US',
-          timestamp: now
+          geo_city: 'Miami',
+          distance_km: 150.0,
+          time_delta_seconds: 1800.0,
+          idempotency_key: 'PRESET-DEV-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
         };
       }
 
-      if (tx) addFeedItem(tx);
+      if (!payload) return;
+
+      try {
+        const resp = await fetch('/api/transactions/authorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (resp.ok) {
+          const res = await resp.json();
+          addFeedItem(res);
+        } else if (resp.status === 403) {
+          const err = await resp.json();
+          const detail = err.detail || {};
+          addFeedItem({
+            amount: payload.amount,
+            decision: 'BLOCKED',
+            fraud_score: detail.fraud_score || 85.0,
+            primary_rule: detail.primary_rule || 'FRAUD_SECURITY_BLOCK',
+            geo_city: payload.geo_city,
+            geo_country: payload.geo_country,
+            timestamp: Date.now()
+          });
+        }
+      } catch (err) {
+        console.warn('Preset execution failed:', err);
+      }
     }
 
     async function submitManualTransaction() {
@@ -521,7 +572,7 @@
             device_fingerprint: 'fp_manual_submission',
             geo_country: 'US',
             geo_city: 'New York',
-            idempotency_key: 'MANUAL-' + Date.now()
+            idempotency_key: 'MANUAL-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)
           })
         });
 
@@ -543,10 +594,9 @@
           });
           return;
         }
-      } catch (e) {}
-
-      // Fallback local evaluation
-      injectPreset(amt > 5000 ? 'tor' : 'normal');
+      } catch (e) {
+        console.warn('Manual submission failed:', e);
+      }
     }
 
     // --- Attack Blitz Simulator ---
